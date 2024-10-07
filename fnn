@@ -1,0 +1,81 @@
+import pandas as pd
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+
+# File paths
+economic_file_path = r"C:\Users\USER\Downloads\economic growth%.xlsx"
+rainfall_file_path = r"C:\Users\USER\Downloads\annual_means_tesf file.xlsx"
+
+# Load datasets
+df_economic = pd.read_excel(economic_file_path)
+df_rainfall = pd.read_excel(rainfall_file_path)
+
+# Inspect column names to check for issues
+print("Economic data columns:", df_economic.columns)
+print("Rainfall data columns:", df_rainfall.columns)
+
+# Strip any leading/trailing spaces from column names
+df_economic.rename(columns=lambda x: x.strip(), inplace=True)
+df_rainfall.rename(columns=lambda x: x.strip(), inplace=True)
+
+# Check if 'Year' column is present in both datasets
+if 'Year' not in df_economic.columns or 'Year' not in df_rainfall.columns:
+    print("Error: 'Year' column not found in one of the datasets.")
+else:
+    # Aggregate rainfall data by year (assuming you want the mean across all regions)
+    df_rainfall['Rainfall'] = df_rainfall.drop(columns='Year').mean(axis=1)
+
+    # Keep only relevant columns
+    df_rainfall = df_rainfall[['Year', 'Rainfall']]
+
+    # Merge economic and aggregated rainfall data on 'Year'
+    df = pd.merge(df_economic, df_rainfall, on='Year')
+
+    # Check for missing values and handle them (if necessary)
+    if df.isnull().sum().any():
+        print("Warning: Missing values found. Consider handling them before proceeding.")
+        df = df.dropna()  # Dropping missing values, or you could use imputation methods
+
+    # Preprocessing: Normalize the data
+    scaler_X = MinMaxScaler()
+    scaler_y = MinMaxScaler()
+
+    # Normalize 'Rainfall'
+    df[['Rainfall']] = scaler_X.fit_transform(df[['Rainfall']])
+
+    # Normalize 'Economic Growth (%)'
+    df[['Economic Growth (%)']] = scaler_y.fit_transform(df[['Economic Growth (%)']])
+
+    # Define features (rainfall) and target variable (economic growth)
+    X = df[['Rainfall']].values
+    y = df[['Economic Growth (%)']].values
+
+    # Split the data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Build the feed-forward neural network model
+    model = Sequential()
+    model.add(Dense(64, input_dim=1, activation='relu'))
+    model.add(Dense(32, activation='relu'))
+    model.add(Dense(1, activation='linear'))  # Output layer for regression
+
+    # Compile the model
+    model.compile(optimizer='adam', loss='mean_squared_error')
+
+    # Train the model
+    model.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.2)
+
+    # Evaluate the model on the test set
+    loss = model.evaluate(X_test, y_test)
+    print(f'Test Loss: {loss}')
+
+    # Predict economic growth based on rainfall data
+    predictions = model.predict(X_test)
+    print(f'Predictions (Normalized): {predictions}')
+
+    # Reverse normalization on predictions
+    predictions_original_scale = scaler_y.inverse_transform(predictions)
+    print(f'Predictions (Original Scale): {predictions_original_scale}')
